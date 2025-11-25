@@ -4,6 +4,8 @@
 
 MapChirp is a privacy-focused browser extension that enriches your X/Twitter experience by displaying user location information directly in your timeline and providing interactive geographic visualizations of the communities you engage with.
 
+> **Status**: MapChirp is currently awaiting approval for the Chrome Web Store and Firefox Add-ons. In the meantime, you can install it manually following the instructions below.
+
 ## 🌟 Overview
 
 In an increasingly global digital discourse, understanding the geographic context of conversations can provide valuable insights. MapChirp seamlessly integrates location data into your X/Twitter experience, revealing patterns and connections across the communities you follow.

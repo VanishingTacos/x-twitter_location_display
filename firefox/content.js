@@ -108,12 +108,27 @@ const storageRemove = (keys) => {
   });
 };
 
+/**
+ * Normalizes country names to their common forms
+ */
+function normalizeCountryNames(location) {
+  const countryReplacements = {
+    'Viet Nam': 'Vietnam'
+  };
+  
+  let normalized = location;
+  for (const [wrong, correct] of Object.entries(countryReplacements)) {
+    normalized = normalized.replace(new RegExp(wrong, 'g'), correct);
+  }
+  return normalized;
+}
+
 function sanitizeLocation(location) {
   if (!location || typeof location !== 'string') return null;
   const trimmed = location.trim();
   if (trimmed.length < 1 || trimmed.length > 100) return null;
   if (['null', 'undefined', 'N/A', 'n/a'].includes(trimmed.toLowerCase())) return null;
-  return trimmed;
+  return normalizeCountryNames(trimmed);
 }
 
 // Track which usernames we've already processed

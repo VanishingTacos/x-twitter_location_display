@@ -144,6 +144,21 @@ window.fetch = async function(...args) {
 };
 
 /**
+ * Normalizes country names to their common forms
+ */
+function normalizeCountryNames(location) {
+  const countryReplacements = {
+    'Viet Nam': 'Vietnam'
+  };
+  
+  let normalized = location;
+  for (const [wrong, correct] of Object.entries(countryReplacements)) {
+    normalized = normalized.replace(new RegExp(wrong, 'g'), correct);
+  }
+  return normalized;
+}
+
+/**
  * Sanitizes location string
  */
 function sanitizeLocation(location) {
@@ -151,7 +166,7 @@ function sanitizeLocation(location) {
   const trimmed = location.trim();
   if (trimmed.length < 1 || trimmed.length > 100) return null;
   if (['null', 'undefined', 'N/A', 'n/a'].includes(trimmed.toLowerCase())) return null;
-  return trimmed;
+  return normalizeCountryNames(trimmed);
 }
 
 /**

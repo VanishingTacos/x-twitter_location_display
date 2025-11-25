@@ -74,15 +74,8 @@ async function updateStats() {
 
     const statusElement = document.getElementById('status');
     if (statusElement) {
-      const loadTs = items && items.extension_loaded_time;
-      if (loadTs && typeof loadTs === 'number') {
-        const secondsAgo = Math.round((Date.now() - loadTs) / 1000);
-        statusElement.textContent = `Active — loaded ${secondsAgo}s ago`;
-        statusElement.style.color = '#00ba7c';
-      } else {
-        statusElement.textContent = 'Loading...';
-        statusElement.style.color = '#f39c12';
-      }
+      statusElement.textContent = 'Active';
+      statusElement.style.color = '#00ba7c';
     }
   } catch (e) {
     const statusElement = document.getElementById('status');

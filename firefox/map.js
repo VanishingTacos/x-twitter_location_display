@@ -67,7 +67,7 @@
     
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc)}&limit=1`;
     try {
-      const resp = await fetch(url, { headers: { 'accept': 'application/json', 'User-Agent': 'MapChirp Browser Extension' } });
+      const resp = await fetch(url, { headers: { 'accept': 'application/json', 'accept-language': 'en', 'User-Agent': 'MapChirp Browser Extension' } });
       if (!resp.ok) {
         console.warn(`Geocode failed for "${loc}": ${resp.status}`);
         return null;
@@ -101,12 +101,17 @@
     const width = (maxTile.x - minTile.x + 1) * TILE_SIZE;
     const height = (maxTile.y - minTile.y + 1) * TILE_SIZE;
     tilesEl.style.width = `${width}px`; tilesEl.style.height = `${height}px`;
+    markersEl.style.width = `${width}px`; markersEl.style.height = `${height}px`;
+    console.log(`Tile range: x=${minTile.x}-${maxTile.x}, y=${minTile.y}-${maxTile.y}, size=${width}x${height}px`);
     for (let ty = minTile.y; ty <= maxTile.y; ty++) {
       for (let tx = minTile.x; tx <= maxTile.x; tx++) {
         const img = document.createElement('img');
         img.className = 'tile'; img.src = TILE_URL(z, tx, ty);
-        img.style.left = `${(tx * TILE_SIZE) - originPx.x}px`;
-        img.style.top = `${(ty * TILE_SIZE) - originPx.y}px`;
+        const left = (tx * TILE_SIZE) - originPx.x;
+        const top = (ty * TILE_SIZE) - originPx.y;
+        img.style.left = `${left}px`;
+        img.style.top = `${top}px`;
+        console.log(`Tile z=${z} x=${tx} y=${ty} → left=${left}px top=${top}px`);
         img.alt = ''; tilesEl.appendChild(img);
       }
     }
@@ -171,7 +176,8 @@
     try { 
       const { map_zoom, map_country } = await storageGet(['map_zoom', 'map_country']); 
       if (map_zoom) zoomSelect.value = String(map_zoom); 
-      if (map_country) countryInput.value = map_country; 
+      // Start with empty country filter to show all users
+      countryInput.value = ''; 
     } catch (e) {
       console.error('Error loading map preferences:', e);
     }

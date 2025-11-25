@@ -63,7 +63,7 @@
     }
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc)}&limit=1`;
     try {
-      const resp = await fetch(url, { headers: { 'accept': 'application/json' } });
+      const resp = await fetch(url, { headers: { 'accept': 'application/json', 'accept-language': 'en' } });
       if (!resp.ok) return null;
       const data = await resp.json();
       if (Array.isArray(data) && data[0] && data[0].lat && data[0].lon) {
@@ -113,6 +113,8 @@
 
     tilesEl.style.width = `${width}px`;
     tilesEl.style.height = `${height}px`;
+    markersEl.style.width = `${width}px`;
+    markersEl.style.height = `${height}px`;
 
     // Place tiles
     for (let ty = minTile.y; ty <= maxTile.y; ty++) {
@@ -207,7 +209,8 @@
     try {
       const { map_zoom, map_country } = await storageGet(['map_zoom', 'map_country']);
       if (map_zoom) zoomSelect.value = String(map_zoom);
-      if (map_country) countryInput.value = map_country;
+      // Start with empty country filter to show all users
+      countryInput.value = '';
     } catch (e) {}
 
     await apply();

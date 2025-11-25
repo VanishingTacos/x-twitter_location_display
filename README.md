@@ -1,4 +1,4 @@
-# X Location Display
+# MapChirp
 
 A small browser extension (Chrome & Firefox) that displays location information for X/Twitter content. This repo contains both Chrome and Firefox manifest and extension code under the `Chrome/` and `firefox/` folders.
 

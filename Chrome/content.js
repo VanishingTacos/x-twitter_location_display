@@ -13,6 +13,9 @@ let settings = {
   countryFilter: []
 };
 
+// Persistent cache duration (match background)
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
 // Load settings from storage
 async function loadSettings() {
   try {
@@ -83,9 +86,8 @@ async function loadPersistentCache() {
     // Load all loc_* entries into memory cache
     for (const [key, value] of Object.entries(result)) {
       if (key.startsWith('loc_') && value && value.location && typeof value.timestamp === 'number') {
-        const username = key.substring(4);
-        const CACHE_DURATION = 24 * 60 * 60 * 1000;
         if (Date.now() - value.timestamp < CACHE_DURATION) {
+          const username = key.substring(4);
           locationCache.set(username, value.location);
         }
       }
@@ -115,7 +117,23 @@ window.fetch = async function(...args) {
       const location = data?.data?.user_result_by_screen_name?.result?.about_profile?.account_based_in;
 
       if (username && location) {
-        locationCache.set(username.toLowerCase(), location);
+        const normalizedUsername = username.toLowerCase();
+        const sanitizedLocation = sanitizeLocation(location);
+        if (sanitizedLocation) {
+          locationCache.set(normalizedUsername, sanitizedLocation);
+          
+          // Persist to storage
+          try {
+            chrome.storage.local.set({
+              [`loc_${normalizedUsername}`]: {
+                location: sanitizedLocation,
+                timestamp: Date.now()
+              }
+            });
+          } catch (e) {
+            // Ignore storage errors
+          }
+        }
       }
     } catch (e) {
       // Ignore errors
@@ -124,6 +142,17 @@ window.fetch = async function(...args) {
 
   return response;
 };
+
+/**
+ * Sanitizes location string
+ */
+function sanitizeLocation(location) {
+  if (!location || typeof location !== 'string') return null;
+  const trimmed = location.trim();
+  if (trimmed.length < 1 || trimmed.length > 100) return null;
+  if (['null', 'undefined', 'N/A', 'n/a'].includes(trimmed.toLowerCase())) return null;
+  return trimmed;
+}
 
 /**
  * Validates and sanitizes username
@@ -307,10 +336,25 @@ async function executeLocationFetch(username) {
     const location = data?.data?.user_result_by_screen_name?.result?.about_profile?.account_based_in;
 
     if (location && typeof location === 'string' && location.trim().length > 0) {
-      const sanitizedLocation = location.trim();
-      clearFailure(normalizedUsername); // Clear failure tracking on success
-      locationCache.set(normalizedUsername, sanitizedLocation);
-      return sanitizedLocation;
+      const sanitizedLocation = sanitizeLocation(location);
+      if (sanitizedLocation) {
+        clearFailure(normalizedUsername); // Clear failure tracking on success
+        locationCache.set(normalizedUsername, sanitizedLocation);
+      
+        // Persist to storage
+        try {
+          chrome.storage.local.set({
+            [`loc_${normalizedUsername}`]: {
+              location: sanitizedLocation,
+              timestamp: Date.now()
+            }
+          });
+        } catch (e) {
+          // ignore storage errors
+        }
+        
+        return sanitizedLocation;
+      }
     }
 
     locationCache.set(normalizedUsername, null);
@@ -345,6 +389,27 @@ async function fetchLocationData(username) {
   // Check if in backoff period
   if (isInBackoff(normalizedUsername)) {
     return null;
+  }
+
+  // Check persistent storage cache if not loaded yet
+  if (!persistentCacheLoaded) {
+    try {
+      const result = await new Promise((resolve) => {
+        chrome.storage.local.get([`loc_${normalizedUsername}`], (items) => resolve(items || {}));
+      });
+      const cached = result && result[`loc_${normalizedUsername}`];
+      if (cached && cached.timestamp && typeof cached.timestamp === 'number') {
+        if (Date.now() - cached.timestamp < CACHE_DURATION) {
+          const sanitized = sanitizeLocation(cached.location);
+          if (sanitized) {
+            locationCache.set(normalizedUsername, sanitized);
+            return sanitized;
+          }
+        }
+      }
+    } catch (e) {
+      // ignore storage errors and continue to network fetch
+    }
   }
 
   // Check if request is already pending

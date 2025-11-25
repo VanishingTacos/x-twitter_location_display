@@ -3,9 +3,11 @@
 (function() {
   const statText = document.getElementById('statText');
   const mapContainer = document.getElementById('map');
+  const saveImageBtn = document.getElementById('saveImageBtn');
 
   let users = [];
   let points = [];
+  let currentCanvas = null;
 
   function storageGet(keys) { 
     if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
@@ -76,7 +78,7 @@
     const spinner = document.createElement('div');
     spinner.style.cssText = 'width:28px;height:28px;border:3px solid #d7dbdc;border-top-color:#1d9bf0;border-radius:50%;animation:mcspin 0.8s linear infinite';
     const text = document.createElement('div');
-    text.textContent = 'Loading map…';
+    text.textContent = 'Generating map...\nThis may take a moment';
     text.style.cssText = 'font-size:12px;color:#536471';
     el.appendChild(spinner);
     el.appendChild(text);
@@ -100,6 +102,7 @@
   function renderStaticMap() {
     mapContainer.innerHTML = '';
     if (!points.length) {
+      currentCanvas = null;
       mapContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#536471;font-size:14px;">No users to display</div>';
       hideOverlay();
       return;
@@ -161,6 +164,9 @@
     canvas.style.height = '100%';
     canvas.style.objectFit = 'contain';
     const ctx = canvas.getContext('2d');
+    
+    // Store reference for saving
+    currentCanvas = canvas;
     
     // Append canvas first
     mapContainer.appendChild(canvas);
@@ -425,6 +431,36 @@
       renderStaticMap();
     } catch (e) { console.error('Error in apply():', e); setStat(0); }
   }
+  function saveMapImage() {
+    if (!currentCanvas) {
+      alert('No map to save. Please wait for the map to finish rendering.');
+      return;
+    }
+    try {
+      currentCanvas.toBlob((blob) => {
+        if (!blob) {
+          alert('Failed to create image.');
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mapchirp-${new Date().toISOString().split('T')[0]}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    } catch (e) {
+      console.error('Error saving image:', e);
+      alert('Failed to save image.');
+    }
+  }
+  
+  if (saveImageBtn) {
+    saveImageBtn.addEventListener('click', saveMapImage);
+  }
+  
   window.addEventListener('resize', () => { if (points.length) renderStaticMap(); });
   init();
 })();

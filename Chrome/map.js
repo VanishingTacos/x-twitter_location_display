@@ -340,7 +340,20 @@
     
     const userList = document.createElement('div');
     userList.style.cssText = 'position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,0.95);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
-    userList.innerHTML = '<strong>Users:</strong><br>' + points.flatMap(p => (p.usernames ? p.usernames.map(u => `• @${u} — ${p.location}`) : [`• @${p.username} — ${p.location}`])).join('<br>');
+    
+    // Build user list safely without innerHTML
+    const title = document.createElement('strong');
+    title.textContent = 'Users:';
+    userList.appendChild(title);
+    userList.appendChild(document.createElement('br'));
+    
+    const userEntries = points.flatMap(p => (p.usernames ? p.usernames.map(u => ({ username: u, location: p.location })) : [{ username: p.username, location: p.location }]));
+    userEntries.forEach((entry, index) => {
+      if (index > 0) userList.appendChild(document.createElement('br'));
+      const line = document.createTextNode(`• @${entry.username} — ${entry.location}`);
+      userList.appendChild(line);
+    });
+    
     mapContainer.appendChild(userList);
     console.log(`Static map rendered with ${points.length} points at zoom ${zoom}`);
   }

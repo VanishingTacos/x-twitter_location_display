@@ -469,44 +469,32 @@ function injectLocationBadge(element, username, location) {
     const usernameContainer = element.querySelector('[data-testid="User-Name"]');
     if (!usernameContainer) return;
 
-    // Create location badge with original structure (SVG icon + text)
+    // Create location badge with original markup but apply color/icon from settings
     const badge = document.createElement('span');
     badge.className = 'x-location-badge';
 
-    // Apply colors from settings: textColor controls icon/text, badgeColor provides a tinted background
+    // Apply color (text/icon color) and a subtle translucent background derived from the color
     try {
-      badge.style.color = settings.textColor || '';
-      // Convert badgeColor (hex) to rgba for subtle background tint
-      const hex = (settings.badgeColor || '#1d9bf0').replace('#', '');
-      if (hex.length === 3) {
-        const r = parseInt(hex[0] + hex[0], 16);
-        const g = parseInt(hex[1] + hex[1], 16);
-        const b = parseInt(hex[2] + hex[2], 16);
-        badge.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.1)`;
-      } else if (hex.length === 6) {
-        const r = parseInt(hex.substring(0,2), 16);
-        const g = parseInt(hex.substring(2,4), 16);
-        const b = parseInt(hex.substring(4,6), 16);
-        badge.style.backgroundColor = `rgba(${r}, ${g}, ${b}, 0.08)`;
-      }
+      badge.style.color = settings.badgeColor || '#1d9bf0';
+      const bg = hexToRgba(settings.badgeColor || '#1d9bf0', 0.09);
+      badge.style.backgroundColor = bg;
     } catch (e) {
-      // ignore color parsing errors
+      // ignore style errors
     }
 
-    // Icon: prefer emoji from settings if provided, otherwise use original SVG
-    if (settings.badgeIcon && String(settings.badgeIcon).trim().length > 0) {
+    // Icon: prefer emoji/icon from settings; fallback to original SVG pin
+    if (settings.badgeIcon && settings.badgeIcon.trim().length > 0) {
       const iconSpan = document.createElement('span');
-      iconSpan.textContent = settings.badgeIcon;
-      iconSpan.style.marginRight = '6px';
-      iconSpan.style.display = 'inline-flex';
-      iconSpan.style.alignItems = 'center';
+      iconSpan.textContent = settings.badgeIcon + ' ';
+      iconSpan.style.marginRight = '4px';
       badge.appendChild(iconSpan);
     } else {
+      // Create SVG icon (same as original)
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('viewBox', '0 0 24 24');
       svg.setAttribute('width', '14');
       svg.setAttribute('height', '14');
-      svg.style.marginRight = '6px';
+      svg.style.marginRight = '4px';
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z');
@@ -527,6 +515,23 @@ function injectLocationBadge(element, username, location) {
     }
   } catch (error) {
     // Silently handle errors
+  }
+}
+
+// Helper: convert hex color to rgba string with given alpha
+function hexToRgba(hex, alpha) {
+  try {
+    let c = hex.replace('#', '');
+    if (c.length === 3) {
+      c = c.split('').map(ch => ch + ch).join('');
+    }
+    const bigint = parseInt(c, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  } catch (e) {
+    return hex;
   }
 }
 

@@ -55,11 +55,53 @@
   }
   // Removed country filtering; always use full user set.
   function setStat(n) { statText.textContent = `${n} user${n===1?'':'s'}`; }
+  // Ensure spinner keyframes are available
+  function ensureSpinnerStyles() {
+    if (!document.getElementById('mapSpinnerStyles')) {
+      const s = document.createElement('style');
+      s.id = 'mapSpinnerStyles';
+      s.textContent = '@keyframes mcspin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(s);
+    }
+  }
+  // Global loading overlay helpers (shown during geocoding and tile loading)
+  let loadingOverlay = null;
+  let overlayStart = 0;
+  const minOverlayMs = 200;
+  function showOverlay() {
+    ensureSpinnerStyles();
+    if (loadingOverlay && loadingOverlay.parentNode) loadingOverlay.remove();
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;background:rgba(255,255,255,0.85);z-index:9999;';
+    const spinner = document.createElement('div');
+    spinner.style.cssText = 'width:28px;height:28px;border:3px solid #d7dbdc;border-top-color:#1d9bf0;border-radius:50%;animation:mcspin 0.8s linear infinite';
+    const text = document.createElement('div');
+    text.textContent = 'Loading map…';
+    text.style.cssText = 'font-size:12px;color:#536471';
+    el.appendChild(spinner);
+    el.appendChild(text);
+    mapContainer.appendChild(el);
+    loadingOverlay = el;
+    overlayStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+  function hideOverlay() {
+    if (!loadingOverlay || !loadingOverlay.parentNode) return;
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const elapsed = now - overlayStart;
+    const wait = Math.max(0, minOverlayMs - elapsed);
+    if (wait > 0) {
+      setTimeout(() => { if (loadingOverlay && loadingOverlay.parentNode) loadingOverlay.remove(); }, wait);
+    } else {
+      loadingOverlay.remove();
+    }
+    loadingOverlay = null;
+  }
   
   function renderStaticMap() {
     mapContainer.innerHTML = '';
     if (!points.length) {
       mapContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#536471;font-size:14px;">No users to display</div>';
+      hideOverlay();
       return;
     }
     
@@ -120,6 +162,9 @@
     canvas.style.objectFit = 'contain';
     const ctx = canvas.getContext('2d');
     
+    // Append canvas first
+    mapContainer.appendChild(canvas);
+    
     // Calculate tile coordinates
     const tileSize = 256;
     const scale = Math.pow(2, zoom);
@@ -162,12 +207,14 @@
           tilesLoaded++;
           if (tilesLoaded === tilesToLoad) {
             drawMarkers();
+            hideOverlay();
           }
         };
         img.onerror = () => {
           tilesLoaded++;
           if (tilesLoaded === tilesToLoad) {
             drawMarkers();
+            hideOverlay();
           }
         };
         img.src = `https://tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
@@ -293,9 +340,10 @@
     
     if (tilesToLoad === 0) {
       drawMarkers();
+      hideOverlay();
     }
     
-    mapContainer.appendChild(canvas);
+    // canvas already appended earlier
     
     const userList = document.createElement('div');
     userList.style.cssText = 'position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,0.95);padding:10px;border-radius:8px;max-height:200px;overflow-y:auto;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
@@ -359,6 +407,7 @@
   }
   async function apply() { 
     try {
+      showOverlay();
       await buildPoints(); 
       renderStaticMap();
     } catch (e) { console.error('Error in apply():', e); setStat(0); }

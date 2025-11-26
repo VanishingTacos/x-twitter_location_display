@@ -73,6 +73,19 @@ const MAX_BACKOFF = 60000; // 60 seconds
 let rateLimitedUntil = 0;
 const RATE_LIMIT_COOLDOWN = 30000; // 30 seconds cooldown after rate limit
 
+// Dynamic Bearer Token
+let dynamicBearerToken = null;
+const STORAGE_KEY_TOKEN = 'x_bearer_token';
+
+// Load token from storage
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  chrome.storage.local.get([STORAGE_KEY_TOKEN], (result) => {
+    if (result[STORAGE_KEY_TOKEN]) {
+      dynamicBearerToken = result[STORAGE_KEY_TOKEN];
+    }
+  });
+}
+
 // Batch-load persistent cache from storage
 async function loadPersistentCache() {
   try {
@@ -101,47 +114,58 @@ async function loadPersistentCache() {
 // Start loading cache immediately
 loadPersistentCache();
 
-// Intercept X's fetch requests to capture location data
-const originalFetch = window.fetch;
-window.fetch = async function (...args) {
-  const response = await originalFetch.apply(this, args);
+// Inject the page script so it runs in page context and can override window.fetch
+(function injectPageObserver() {
+  try {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('page_inject.js');
+    script.onload = function () { this.remove(); };
+    (document.head || document.documentElement).appendChild(script);
+  } catch (e) {
+    // ignore
+  }
+})();
 
-  // Check if this is a GraphQL AboutAccountQuery response
-  const url = args[0];
-  if (typeof url === 'string' && url.includes('AboutAccountQuery')) {
-    // Clone response so we can read it without consuming it
-    const clonedResponse = response.clone();
-    try {
-      const data = await clonedResponse.json();
-      const username = data?.data?.user_result_by_screen_name?.result?.core?.screen_name;
-      const location = data?.data?.user_result_by_screen_name?.result?.about_profile?.account_based_in;
+// Listen for messages from the page injector
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  const data = event.data;
+  if (!data || data.source !== 'x-location-display-page') return;
 
-      if (username && location) {
-        const normalizedUsername = username.toLowerCase();
-        const sanitizedLocation = sanitizeLocation(location);
-        if (sanitizedLocation) {
-          locationCache.set(normalizedUsername, sanitizedLocation);
+  try {
+    if (data.type === 'token' && data.token) {
+      if (dynamicBearerToken !== data.token) {
+        dynamicBearerToken = data.token;
+        chrome.storage.local.set({ [STORAGE_KEY_TOKEN]: data.token });
+      }
+      return;
+    }
 
-          // Persist to storage
-          try {
-            chrome.storage.local.set({
-              [`loc_${normalizedUsername}`]: {
-                location: sanitizedLocation,
-                timestamp: Date.now()
-              }
-            });
-          } catch (e) {
-            // Ignore storage errors
-          }
+    const username = data.username;
+    const location = data.location;
+    if (username && location) {
+      const normalizedUsername = username.toLowerCase();
+      const sanitizedLocation = sanitizeLocation(location);
+      if (sanitizedLocation) {
+        locationCache.set(normalizedUsername, sanitizedLocation);
+
+        // Persist to storage
+        try {
+          chrome.storage.local.set({
+            [`loc_${normalizedUsername}`]: {
+              location: sanitizedLocation,
+              timestamp: Date.now()
+            }
+          });
+        } catch (e) {
+          // ignore storage errors
         }
       }
-    } catch (e) {
-      // Ignore errors
     }
+  } catch (e) {
+    // ignore
   }
-
-  return response;
-};
+});
 
 /**
  * Normalizes country names to their common forms
@@ -332,11 +356,14 @@ async function executeLocationFetch(username) {
     const variables = JSON.stringify({ screenName: username });
     const url = `https://x.com/i/api/graphql/${queryId}/AboutAccountQuery?variables=${encodeURIComponent(variables)}`;
 
+    // Use dynamic token if available, otherwise fallback (though fallback might be stale)
+    const authHeader = dynamicBearerToken || 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'accept': '*/*',
-        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+        'authorization': authHeader,
         'content-type': 'application/json',
         'x-csrf-token': csrfToken,
         'x-twitter-active-user': 'yes',

@@ -84,11 +84,16 @@ loadPersistentCache();
 
 const storageSet = (items) => {
   if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-    return browser.storage.local.set(items);
+    return browser.storage.local.set(items).catch(() => { });
   }
   return new Promise((resolve) => {
     try {
-      chrome.storage.local.set(items, () => resolve());
+      chrome.storage.local.set(items, () => {
+        if (chrome.runtime.lastError) {
+          // ignore
+        }
+        resolve();
+      });
     } catch (e) {
       resolve();
     }
@@ -175,6 +180,17 @@ const MAX_BACKOFF = 60000; // 60 seconds
 let rateLimitedUntil = 0;
 const RATE_LIMIT_COOLDOWN = 30000; // 30 seconds cooldown after rate limit
 
+// Dynamic Bearer Token
+let dynamicBearerToken = null;
+const STORAGE_KEY_TOKEN = 'x_bearer_token';
+
+// Load token from storage
+storageGet([STORAGE_KEY_TOKEN]).then(result => {
+  if (result[STORAGE_KEY_TOKEN]) {
+    dynamicBearerToken = result[STORAGE_KEY_TOKEN];
+  }
+});
+
 // Inject the page script so it runs in page context and can override window.fetch
 (function injectPageObserver() {
   try {
@@ -194,7 +210,18 @@ window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   const data = event.data;
   if (!data || data.source !== 'x-location-display-page') return;
+
   try {
+    if (data.type === 'token' && data.token) {
+      if (dynamicBearerToken !== data.token) {
+        dynamicBearerToken = data.token;
+        storageSet({ [STORAGE_KEY_TOKEN]: data.token }).catch(err => {
+          // console.error('Failed to save token:', err);
+        });
+      }
+      return;
+    }
+
     const username = data.username;
     const location = data.location;
     if (username && location) {
@@ -356,11 +383,14 @@ async function executeLocationFetch(username) {
     const variables = JSON.stringify({ screenName: username });
     const url = `https://x.com/i/api/graphql/${queryId}/AboutAccountQuery?variables=${encodeURIComponent(variables)}`;
 
+    // Use dynamic token if available, otherwise fallback (though fallback might be stale)
+    const authHeader = dynamicBearerToken || 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'accept': '*/*',
-        'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+        'authorization': authHeader,
         'content-type': 'application/json',
         'x-csrf-token': csrfToken,
         'x-twitter-active-user': 'yes',
